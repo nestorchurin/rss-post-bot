@@ -113,9 +113,6 @@ async def send_item(item):
         
     text_content = clean_html(content_html)
     
-    # Limit text length for Telegram caption (1024 chars) or message (4096 chars)
-    # If we send photo, caption limit is 1024.
-    
     enclosure = item.find('enclosure')
     image_url = enclosure['url'] if enclosure else None
 
@@ -123,34 +120,52 @@ async def send_item(item):
     safe_title = html.escape(title)
     safe_text = html.escape(text_content)
 
-    # Construct message
-    message_text = f"<b>{safe_title}</b>\n\n"
-    message_text += f"{safe_text[:900]}..." if len(safe_text) > 900 else safe_text
-    message_text += f"\n\n<a href=\"{link}\">Посилання</a>"
+    # Construct parts
+    header = f"<b>{safe_title}</b>\n\n"
+    footer = f"\n\n<a href=\"{link}\">Посилання</a>"
     if MONOBANK_LINK:
-        message_text += f" | <a href=\"{MONOBANK_LINK}\">Підтримати</a>"
+        footer += f" | <a href=\"{MONOBANK_LINK}\">Підтримати</a>"
 
-    try:
-        if image_url:
+    # Calculate lengths (approximate, including tags)
+    full_message = header + safe_text + footer
+    
+    # Check if we can send as photo (limit 1024)
+    if image_url and len(full_message) <= 1024:
+        try:
             await bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo=image_url,
-                caption=message_text,
+                caption=full_message,
                 parse_mode=ParseMode.HTML
             )
+            await add_post(link)
+            logging.info(f"Posted (photo): {title}")
+            await asyncio.sleep(3)
+            return
+        except Exception as e:
+            logging.error(f"Error sending photo {link}: {e}. Falling back to text.")
+            # Fallback to text if photo fails
+
+    # If no image or text too long for caption, send as message (limit 4096)
+    # Truncate if necessary for 4096 limit
+    if len(full_message) > 4096:
+        available = 4096 - len(header) - len(footer) - 3
+        if available > 0:
+            safe_text = safe_text[:available] + "..."
+            full_message = header + safe_text + footer
         else:
-            await bot.send_message(
-                chat_id=CHANNEL_ID,
-                text=message_text,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=False
-            )
-        
+            full_message = full_message[:4096]
+
+    try:
+        await bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=full_message,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=False
+        )
         await add_post(link)
-        logging.info(f"Posted: {title}")
-        # Sleep to avoid hitting rate limits
+        logging.info(f"Posted (text): {title}")
         await asyncio.sleep(3) 
-        
     except Exception as e:
         logging.error(f"Error sending post {link}: {e}")
 

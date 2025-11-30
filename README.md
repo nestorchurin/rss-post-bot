@@ -6,7 +6,9 @@ This bot reads an RSS feed and publishes new posts to a Telegram channel.
 
 - Asynchronous RSS feed checking.
 - Publication history stored in a local SQLite database (to avoid duplicates).
-- Message formatting (title, photo, text, link).
+- **Smart message formatting**:
+  - Short posts (<1024 chars) are sent as photos with captions.
+  - Long posts (>1024 chars) are sent as text messages to preserve full content (up to 4096 chars).
 - Text formatting support (paragraph preservation).
 
 ## Installation
